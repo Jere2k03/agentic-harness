@@ -1,6 +1,6 @@
 {
   "name": "@jere2k03/agentic-harness",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A minimal, adapter-based TypeScript harness for building tool-using LLM agents.",
   "main": "dist/lib.js",
   "types": "dist/lib.d.ts",
