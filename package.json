@@ -1,0 +1,70 @@
+{
+  "name": "@jere2k03/agentic-harness",
+  "version": "1.0.0",
+  "description": "A minimal, adapter-based TypeScript harness for building tool-using LLM agents.",
+  "main": "dist/lib.js",
+  "types": "dist/lib.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib.d.ts",
+      "default": "./dist/lib.js"
+    }
+  },
+  "bin": {
+    "agentic-harness": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "chat": "tsx src/index.ts",
+    "build": "rimraf dist && tsc",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jere2k03/agentic-harness.git"
+  },
+  "keywords": [
+    "agent",
+    "llm",
+    "anthropic",
+    "claude",
+    "mcp",
+    "tool-use",
+    "ai-agent"
+  ],
+  "author": "Jeremias Matt",
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Jere2k03/agentic-harness/issues"
+  },
+  "homepage": "https://github.com/Jere2k03/agentic-harness#readme",
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/parser": "^8.65.0",
+    "eslint": "^10.8.0",
+    "prettier": "^3.9.6",
+    "rimraf": "^6.1.3",
+    "tsx": "^4.23.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "dotenv": "^17.4.2",
+    "zod": "^4.4.3"
+  }
+}
