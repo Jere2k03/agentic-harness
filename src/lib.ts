@@ -11,4 +11,4 @@ export type {
     ToolDefinition,
     AdapterRequest,
     AdapterResponse,
-} from "./config.js";
+} from "./adapter/config.js";
