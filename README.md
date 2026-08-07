@@ -24,8 +24,12 @@ essential moving parts:
 - **ToolRegistry** — a single place to register tools, whatever backs them: a local
   function, an MCP server, or generated code.
 - **ContextManager** — keeps the running conversation history.
+- **Validator** — checks tool calls against the registry (unknown tool name, missing
+  required parameters) before execution and drives a bounded retry loop.
+- **Logger** — structured, timestamped trace of every step in a run (request sent, response
+  received, validation result, tool dispatch/result, retries, loop end).
 - **HarnessEngine** — drives the actual agent loop: send request → get text or a tool call →
-  execute the tool → feed the result back → repeat until the model returns text.
+  validate → execute the tool → feed the result back → repeat until the model returns text.
 
 It's intentionally small and readable rather than batteries-included — a good starting
 point if you want to understand how an agent loop works under the hood, or to build your
@@ -45,7 +49,17 @@ own harness on top of it.
                      │        │          │
                      │        ▼          │
                      │  ┌────────────┐   │
+                     │  │ Validator  │   │
+                     │  └────────────┘   │
+                     │        │          │
+                     │        ▼          │
+                     │  ┌────────────┐   │
                      │  │ToolRegistry│───┼──▶ function_call / mcp / code_gen
+                     │  └────────────┘   │
+                     │        │          │
+                     │        ▼          │
+                     │  ┌────────────┐   │
+                     │  │  Logger    │   │
                      │  └────────────┘   │
                      └──────────────────┘
 ```
@@ -53,18 +67,20 @@ own harness on top of it.
 | Module | Path | Responsibility |
 |---|---|---|
 | `HarnessEngine` | `src/engine/engine.ts` | Runs the request/tool-call loop |
-| `Validator` | `src/engine/validation.ts` | Response/tool-call validation *(stub, WIP)* |
+| `Validator` | `src/engine/validation.ts` | Tool-call validation & retry decisions |
 | `Adapter` | `src/adapter/adapter.ts` | Provider-agnostic LLM interface |
 | `AnthropicAdapter` | `src/adapter/anthropic.ts` | Anthropic Messages API implementation |
 | `ContextManager` | `src/context/manager.ts` | In-memory conversation history |
 | `ToolRegistry` | `src/tools/registry.ts` | Tool registration & dispatch |
-| `Logger` | `src/traceability/logging.ts` | Run/trace logging *(stub, WIP)* |
+| `Logger` | `src/traceability/logging.ts` | Structured run/trace logging |
+| `paths` / `settings_loader` | `src/config/` | Global config file locations, load/validate config |
 
 ## Status
 
-This is an early-stage, experimental project. The Anthropic adapter and
-`function_call`-backed tools are functional; the `mcp` and `code_gen` tool execution paths,
-`Validator`, and `Logger` are currently stubs. Expect breaking changes.
+This is an early-stage, experimental project. The Anthropic adapter,
+`function_call`-backed tools, `Validator`, and `Logger` are functional and covered by
+tests. The `mcp` and `code_gen` tool execution paths are currently stubs. Expect breaking
+changes.
 
 ## Getting started
 
@@ -73,11 +89,9 @@ This is an early-stage, experimental project. The Anthropic adapter and
 - Node.js ≥ 20
 - An [Anthropic API key](https://console.anthropic.com/)
 
-Either way, set your API key in the environment first:
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-```
+Unlike a typical `.env`-based CLI, `agentic-harness` stores its configuration **globally**,
+outside of any project directory, so the command works the same no matter where you run it
+from.
 
 ### Option A: Use the CLI (no install needed)
 
@@ -92,13 +106,39 @@ npm install -g @jere2k03/agentic-harness
 agentic-harness
 ```
 
-You'll get an interactive CLI chat. Type `exit` to quit.
+**First run:** the CLI creates `~/.agentic-harness/` (containing `config.json` and
+`SYSTEM.md`) if it doesn't exist yet, prints a short welcome message, and — if no API key
+is set — prompts you for one interactively and saves it to `config.json`. From then on it
+just starts the chat.
 
 ```
+Welcome to the Agentic Harness! It looks like this is your first time running the application.
+
+Please enter your API key: sk-ant-...
 Chat started. Type 'exit' to quit.
 
 User: what's the weather in Berlin?
 Assistant: Right then, Berlin's a bit grim today — 7°C and rainy, innit.
+```
+
+### Configuration
+
+All settings live in `~/.agentic-harness/`:
+
+| File | Purpose |
+|---|---|
+| `config.json` | `apiKey`, `model`, `max_tokens` |
+| `SYSTEM.md` | The system prompt used for every conversation |
+
+Edit either file directly and restart the CLI to pick up changes — no rebuild needed.
+`config.json` defaults to:
+
+```json
+{
+  "apiKey": "YOUR_API_KEY_HERE",
+  "model": "claude-haiku-4-5",
+  "max_tokens": 1024
+}
 ```
 
 ### Option B: Use it as a library
@@ -117,13 +157,18 @@ import {
   HarnessEngine,
 } from "@jere2k03/agentic-harness";
 
-const adapter = new AnthropicAdapter(process.env.ANTHROPIC_API_KEY!);
+const adapter = new AnthropicAdapter({
+  apiKey: process.env.ANTHROPIC_API_KEY!,
+  model: "claude-haiku-4-5",
+  max_tokens: 1024,
+});
 const context = new ContextManager();
 const registry = new ToolRegistry();
 const validator = new Validator();
 const logger = new Logger();
 
-const engine = new HarnessEngine(adapter, registry, validator, logger, context);
+const systemPrompt = "You are a helpful assistant.";
+const engine = new HarnessEngine(systemPrompt, adapter, registry, validator, logger, context);
 
 const answer = await engine.run_agent_loop("what's the weather in Berlin?");
 console.log(answer);
@@ -138,9 +183,14 @@ Register your own tools on the `ToolRegistry` before running the loop — see
 git clone https://github.com/Jere2k03/agentic-harness.git
 cd agentic-harness
 npm install
-cp .env.example .env   # then edit .env and set ANTHROPIC_API_KEY
-npm run dev
+npm run build
+npm link
+agentic-harness   # first run walks you through setup, see above
 ```
+
+`npm link` makes the `agentic-harness` command available globally on your machine, backed
+by your local checkout — rebuild with `npm run build` after changes. To remove it later:
+`npm unlink -g agentic-harness`.
 
 ## Registering a tool
 
@@ -171,14 +221,29 @@ Three execution types are supported by the registry's shape today:
 - `mcp` — delegate to a remote MCP server tool *(planned)*
 - `code_gen` — have the model generate and execute code *(planned)*
 
+Every tool call is validated by the `Validator` before execution — unknown tool names or
+missing required parameters are turned into a retry, up to a fixed attempt limit, with the
+failure reason fed back to the model.
+
 ## Scripts
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Run the CLI with hot reload (`tsx watch`) |
+| `npm run dev` | Run the CLI with hot reload (`tsx watch`) — for development, not interactive chat sessions |
+| `npm run chat` | Run the CLI once, without watch mode — use this for an actual chat session |
 | `npm run build` | Type-check and compile to `dist/` |
 | `npm test` | Run the test suite (`vitest`) |
 | `npm run lint` | Lint `src/` with ESLint |
+
+## Roadmap
+
+Actively developed. See internal roadmap for the full plan — current focus areas:
+
+- Real MCP client + code-execution sandbox (currently stubs)
+- Second model adapter (proving true provider-agnosticism)
+- CLI flags (`--model`, `--max-tokens`, one-shot `-p "prompt"` mode)
+- A proper terminal UI (beyond the current line-based chat)
+- Sub-agents as a registry execution type
 
 ## Contributing
 
