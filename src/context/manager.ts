@@ -1,4 +1,4 @@
-import { AgentMessage } from "../config.js";
+import { AgentMessage } from "../adapter/config.js";
 
 // Define the ContextManager class that manages the context of messages exchanged between the user and the assistant
 export class ContextManager {
