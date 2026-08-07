@@ -1,5 +1,4 @@
-import { ToolRegistry } from "./registry.js";
-import { registry } from "./index.js";
+import { registry } from "../index.js";
 
 // Register a new tool called "get_weather" with the ToolRegistry (test tool for function calling)
 registry.registerNewTool(
