@@ -1,17 +1,17 @@
 import {Adapter} from "./adapter.js";
-import {AdapterRequest, AdapterResponse} from "../config.js";
+import {AdapterRequest, AdapterResponse} from "./config.js";
+import {SetupConfig} from "../config/settings_loader.js";
 import {Anthropic} from "@anthropic-ai/sdk";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 // Define the AnthropicAdapter class that implements the Adapter interface
 export class AnthropicAdapter implements Adapter {
     private client: Anthropic;
+    private config: {model: string; max_tokens: number};
 
     // Initialize the AnthropicAdapter with the provided API key
-    constructor(apiKey: string) {
-        this.client = new Anthropic({apiKey: apiKey});
+    constructor(config: { apiKey: string; model: string; max_tokens: number }) {
+        this.client = new Anthropic({apiKey: config.apiKey});
+        this.config = {model: config.model, max_tokens: config.max_tokens};
     }
 
     // Send a request to the Anthropic API and return the translated response
@@ -19,8 +19,8 @@ export class AnthropicAdapter implements Adapter {
         // console.log("Sending request to Anthropic API:", request);
         // set up the parameters for the Anthropic API request
         const anthropic_params: Anthropic.MessageCreateParams = {
-            model: "claude-haiku-4-5",
-            max_tokens: 1024,
+            model: this.config.model,
+            max_tokens: this.config.max_tokens,
             system: request.system_prompt,
             messages: request.messages.map(msg => {
             // If the message is from the tool, format it as a user message with a tool_result block
@@ -86,7 +86,7 @@ export class AnthropicAdapter implements Adapter {
         );
 
         let adapterResponse: AdapterResponse;
-        
+
         // Translate the stop_reason from the Anthropic API to the internal AdapterResponse format
         switch (message.stop_reason) {
             case "tool_use":
@@ -135,8 +135,6 @@ export class AnthropicAdapter implements Adapter {
                 };
                 break;
         }
-
-        // console.log("Translated AdapterResponse:", adapterResponse);
         return adapterResponse;
     }
 }
