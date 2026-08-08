@@ -71,15 +71,16 @@ own harness on top of it.
 | `Adapter` | `src/adapter/adapter.ts` | Provider-agnostic LLM interface |
 | `AnthropicAdapter` | `src/adapter/anthropic.ts` | Anthropic Messages API implementation |
 | `ContextManager` | `src/context/manager.ts` | In-memory conversation history |
-| `ToolRegistry` | `src/tools/registry.ts` | Tool registration & dispatch |
+| `ToolRegistry` | `src/tools/registry.ts` | Tool registration & dispatch (`function_call`, `mcp`, `code_gen`) |
+| `mcp` | `src/tools/mcp/mcp.ts` | Connects to configured MCP servers and registers their tools |
 | `Logger` | `src/traceability/logging.ts` | Structured run/trace logging |
 | `paths` / `settings_loader` | `src/config/` | Global config file locations, load/validate config |
 
 ## Status
 
-This is an early-stage, experimental project. The Anthropic adapter,
-`function_call`-backed tools, `Validator`, and `Logger` are functional and covered by
-tests. The `mcp` and `code_gen` tool execution paths are currently stubs. Expect breaking
+This is an early-stage, experimental project. The Anthropic adapter, `function_call`- and
+`mcp`-backed tools, `Validator`, and `Logger` are functional; `function_call` validation is
+covered by tests. The `code_gen` tool execution path is currently a stub. Expect breaking
 changes.
 
 ## Getting started
@@ -103,7 +104,7 @@ Or install it globally:
 
 ```bash
 npm install -g @jere2k03/agentic-harness
-agentic-harness
+agentic-harness-jm
 ```
 
 **First run:** the CLI creates `~/.agentic-harness/` (containing `config.json` and
@@ -127,7 +128,7 @@ All settings live in `~/.agentic-harness/`:
 
 | File | Purpose |
 |---|---|
-| `config.json` | `apiKey`, `model`, `max_tokens` |
+| `config.json` | LLM settings (`llm.apiKey`, `llm.model`, `llm.max_tokens`) and MCP servers (`mcp`) |
 | `SYSTEM.md` | The system prompt used for every conversation |
 
 Edit either file directly and restart the CLI to pick up changes — no rebuild needed.
@@ -135,9 +136,28 @@ Edit either file directly and restart the CLI to pick up changes — no rebuild 
 
 ```json
 {
-  "apiKey": "YOUR_API_KEY_HERE",
-  "model": "claude-haiku-4-5",
-  "max_tokens": 1024
+  "llm": {
+    "apiKey": "YOUR_API_KEY_HERE",
+    "model": "claude-haiku-4-5",
+    "max_tokens": 1024
+  },
+  "mcp": []
+}
+```
+
+#### Connecting MCP servers
+
+Add entries to the `mcp` array to have the CLI connect to them on startup, list their
+tools, and register each one on the `ToolRegistry` automatically — no code changes needed.
+Both `stdio` and `http` transports are supported:
+
+```json
+{
+  "llm": { "...": "..." },
+  "mcp": [
+    { "transport": "stdio", "name": "my-server", "command": "npx", "args": ["-y", "my-mcp-server"] },
+    { "transport": "http", "name": "remote-server", "serverUrl": "https://example.com/mcp" }
+  ]
 }
 ```
 
@@ -217,9 +237,12 @@ registry.registerNewTool(
 
 Three execution types are supported by the registry's shape today:
 
-- `function_call` — run a local async handler *(implemented)*
-- `mcp` — delegate to a remote MCP server tool *(planned)*
-- `code_gen` — have the model generate and execute code *(planned)*
+- `function_call` — run a local async handler *(implemented)*, registered via
+  `registry.registerNewTool(...)` as above
+- `mcp` — delegate to a remote MCP server tool *(implemented)*, registered in bulk via
+  `registry.registerMcpServer(config)` (or configured declaratively — see
+  [Connecting MCP servers](#connecting-mcp-servers))
+- `code_gen` — have the model generate and execute code *(stub — not yet implemented)*
 
 Every tool call is validated by the `Validator` before execution — unknown tool names or
 missing required parameters are turned into a retry, up to a fixed attempt limit, with the
@@ -239,7 +262,7 @@ failure reason fed back to the model.
 
 Actively developed. See internal roadmap for the full plan — current focus areas:
 
-- Real MCP client + code-execution sandbox (currently stubs)
+- Code-execution sandbox for `code_gen` tools (currently a stub)
 - Second model adapter (proving true provider-agnosticism)
 - CLI flags (`--model`, `--max-tokens`, one-shot `-p "prompt"` mode)
 - A proper terminal UI (beyond the current line-based chat)
