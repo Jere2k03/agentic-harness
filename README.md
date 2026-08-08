@@ -80,7 +80,7 @@ own harness on top of it.
 
 This is an early-stage, experimental project. The Anthropic adapter, `function_call`- and
 `mcp`-backed tools, `Validator`, and `Logger` are functional; `function_call` validation is
-covered by tests. The `code_gen` tool execution path is currently a stub. Expect breaking
+covered by tests. All three tool execution types (`function_call`, `mcp`, `code_gen`) are functional. Expect breaking
 changes.
 
 ## Getting started
@@ -215,7 +215,7 @@ by your local checkout — rebuild with `npm run build` after changes. To remove
 ## Registering a tool
 
 Tools are registered on the shared `registry` and are immediately available to the agent
-loop. Here's the built-in example (`src/tools/function_calling.ts`):
+loop. Here's the built-in example (`src/tools/function_calling/function_calling.ts`):
 
 ```ts
 import { registry } from "./index.js";
@@ -235,6 +235,45 @@ registry.registerNewTool(
 );
 ```
 
+`code_gen` tools work the same way, but the handler runs the model-supplied code in a
+sandboxed `vm` context instead of doing fixed work — here's the built-in `execute_code`
+tool (`src/tools/code_generation/code_generation.ts`):
+
+```ts
+import vm from "node:vm";
+import { registry } from "../index.js";
+
+registry.registerNewTool(
+  {
+    name: "execute_code",
+    description:
+      "Executes a JavaScript code snippet in a sandbox. Use the built-in vmLog(...) " +
+      "function instead of console.log(...) to output values you want returned as the result.",
+    parameters: {
+      code: { type: "string", description: "The JavaScript code to execute", required: true },
+    },
+  },
+  "code_gen",
+  {
+    handler: async (params) => {
+      const code = params.code as string;
+      const vmLogArray: string[] = [];
+      function vmLog(...args: unknown[]) {
+        vmLogArray.push(args.map(a => (typeof a === "string" ? a : JSON.stringify(a))).join(" "));
+      }
+      const context = { vmLogArray, vmLog };
+      vm.createContext(context);
+      try {
+        new vm.Script(code).runInContext(context, { timeout: 1000 });
+      } catch (error) {
+        return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      }
+      return vmLogArray.join("\n");
+    },
+  },
+);
+```
+
 Three execution types are supported by the registry's shape today:
 
 - `function_call` — run a local async handler *(implemented)*, registered via
@@ -242,7 +281,12 @@ Three execution types are supported by the registry's shape today:
 - `mcp` — delegate to a remote MCP server tool *(implemented)*, registered in bulk via
   `registry.registerMcpServer(config)` (or configured declaratively — see
   [Connecting MCP servers](#connecting-mcp-servers))
-- `code_gen` — have the model generate and execute code *(stub — not yet implemented)*
+- `code_gen` — have the model generate and execute JavaScript, sandboxed via Node's built-in
+  `vm` module *(implemented)*, registered the same way as `function_call` (see
+  `src/tools/code_generation/code_generation.ts`). The sandbox exposes a `vmLog(...)`
+  function instead of `console.log` — the tool description tells the model to use it, and
+  its arguments become the returned result. Execution has a 1-second timeout; runtime
+  errors are caught and returned as text instead of crashing the loop.
 
 Every tool call is validated by the `Validator` before execution — unknown tool names or
 missing required parameters are turned into a retry, up to a fixed attempt limit, with the
@@ -262,7 +306,6 @@ failure reason fed back to the model.
 
 Actively developed. See internal roadmap for the full plan — current focus areas:
 
-- Code-execution sandbox for `code_gen` tools (currently a stub)
 - Second model adapter (proving true provider-agnosticism)
 - CLI flags (`--model`, `--max-tokens`, one-shot `-p "prompt"` mode)
 - A proper terminal UI (beyond the current line-based chat)
