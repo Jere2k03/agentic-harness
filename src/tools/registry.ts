@@ -59,11 +59,12 @@ export class ToolRegistry {
   ) {
     switch (executionType) {
       case "function_call":
-        if (!options.handler) throw new Error("function_call braucht einen handler");
+        if (!options.handler) throw new Error("function_call needs a handler");
         this.registerFunctionTool(definition, options.handler);
         break;
       case "code_gen":
-        this.registerCodeGenTool(definition);
+        if (!options.handler) throw new Error("code_gen needs a handler");
+        this.registerCodeGenTool(definition, options.handler);
         break;
     }
   }
@@ -74,8 +75,8 @@ export class ToolRegistry {
   }
 
   // Register a new tool that is executed via code generation
-  private registerCodeGenTool(definition: ToolDefinition) {
-    this.tools.set(definition.name, { def: definition, execType: "code_gen", caller: { type: "code_gen", params: async (params: Record<string, unknown>) => "" } });
+  private registerCodeGenTool(definition: ToolDefinition, handler: FunctionHandler) {
+    this.tools.set(definition.name, { def: definition, execType: "code_gen", caller: { type: "code_gen", params: handler } });
   }
 
   // Connect to an MCP server, list its tools, and register every tool it offers
@@ -136,8 +137,7 @@ export class ToolRegistry {
       }
 
       case "code_gen":
-        // Implement code generation logic here
-        return Promise.resolve(`Code generation for tool ${name}`);
+        return registeredTool.caller.params(params);
 
       default:
         throw new Error(`Unknown execution type for tool ${name}.`);

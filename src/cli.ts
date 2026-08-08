@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { AnthropicAdapter, ContextManager, Validator, Logger, HarnessEngine, registry } from "./lib.js";
 import "./tools/function_calling/function_calling.js";
+import "./tools/code_generation/code_generation.js";
 import * as mcp from "./tools/mcp/mcp.js";
 import * as paths from "./config/paths.js";
 import * as settingsLoader from "./config/settings_loader.js";
