@@ -78,10 +78,10 @@ own harness on top of it.
 
 ## Status
 
-This is an early-stage, experimental project. The Anthropic adapter, `function_call`- and
-`mcp`-backed tools, `Validator`, and `Logger` are functional; `function_call` validation is
-covered by tests. All three tool execution types (`function_call`, `mcp`, `code_gen`) are functional. Expect breaking
-changes.
+This is an early-stage, experimental project. The Anthropic adapter and all three tool
+execution types (`function_call`, `mcp`, `code_gen`) are functional; `function_call`
+validation is covered by tests. CLI supports an interactive chat and a one-shot `-p` mode.
+Expect breaking changes.
 
 ## Getting started
 
@@ -120,6 +120,21 @@ Chat started. Type 'exit' to quit.
 
 User: what's the weather in Berlin?
 Assistant: Right then, Berlin's a bit grim today — 7°C and rainy, innit.
+```
+
+### CLI flags
+
+Besides the interactive chat, the CLI supports a few flags:
+
+| Flag | Short | Description |
+|---|---|---|
+| `--print "prompt"` | `-p` | One-shot mode: run a single prompt, print only the answer to stdout, and exit — no chat loop, no welcome message. Useful for scripts and piping. |
+| `--model <name>` | `-m` | Override `llm.model` from `config.json` for this run only. |
+| `--max-tokens <n>` | `-t` | Override `llm.max_tokens` from `config.json` for this run only. |
+
+```bash
+agentic-harness-jm -p "What's the weather in Berlin?"
+agentic-harness-jm --model claude-opus-4-8 -p "Explain the halting problem in one sentence."
 ```
 
 ### Configuration
@@ -307,7 +322,6 @@ failure reason fed back to the model.
 Actively developed. See internal roadmap for the full plan — current focus areas:
 
 - Second model adapter (proving true provider-agnosticism)
-- CLI flags (`--model`, `--max-tokens`, one-shot `-p "prompt"` mode)
 - A proper terminal UI (beyond the current line-based chat)
 - Sub-agents as a registry execution type
 
