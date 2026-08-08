@@ -8,12 +8,16 @@ import * as settingsLoader from "./config/settings_loader.js";
 import * as fs from "fs";
 import * as readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
+import { parseCliArgs } from "./config/cli_args.js";
+
+const { values } = parseCliArgs();
+const oneShotPrompt = values.print;
 
 const rl = readline.createInterface({ input: stdin, output: stdout });
 
 const setupFolderExisted = paths.ensurePathSetup();
 
-if (!setupFolderExisted) {
+if (!setupFolderExisted && !oneShotPrompt) {
   console.log("Welcome to the Agentic Harness! It looks like this is your first time running the application.\n");
 }
 
@@ -25,7 +29,14 @@ if (!apiKeySet) {
   fs.writeFileSync(paths.CONFIG_FILE_PATH, JSON.stringify(setupConfig, null, 2));
 }
 
-//register mcp tools
+if (values.model) {
+  setupConfig.llm.model = values.model;
+}
+if (values.maxTokens) {
+  setupConfig.llm.max_tokens = Number(values.maxTokens);
+}
+
+// register mcp tools
 const mcpServers = setupConfig.mcp || [];
 await mcp.registerMcpTools(mcpServers);
 
@@ -37,17 +48,24 @@ const logger = new Logger();
 
 const engine = new HarnessEngine(systemPrompt, adapter, registry, validator, logger, context);
 
-console.log("Chat started. Type 'exit' to quit.\n");
+if (oneShotPrompt) {
+  const answer = await engine.run_agent_loop(oneShotPrompt);
+  console.log(answer);
+  rl.close();
+  process.exit(0);
+} else {
+  console.log("Chat started. Type 'exit' to quit.\n");
 
-while (true) {
-  const userInput = await rl.question("User: ");
+  while (true) {
+    const userInput = await rl.question("User: ");
 
-  if (userInput.trim().toLowerCase() === "exit") {
-    break;
+    if (userInput.trim().toLowerCase() === "exit") {
+      break;
+    }
+
+    const answer = await engine.run_agent_loop(userInput);
+    console.log("Assistant:", answer, "\n");
   }
 
-  const answer = await engine.run_agent_loop(userInput);
-  console.log("Assistant:", answer, "\n");
+  rl.close();
 }
-
-rl.close();
